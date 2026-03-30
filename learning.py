@@ -226,9 +226,13 @@ chatbot = RunnableWithMessageHistory(
 # Document Loaders
 
 #example of pdf loading:
-from langchain_community.document_loaders import PyPDFLoader
+# from langchain_community.document_loaders import PyPDFLoader
 
-loader = PyPDFLoader("werqlabs_gpt.pdf")
+# loader = PyPDFLoader("werqlabs_gpt.pdf")
+# documents = loader.load()
+#alt
+from langchain_community.document_loaders import TextLoader
+loader = TextLoader("./about_werqlabs.txt", encoding="utf-8")
 documents = loader.load()
 
 
@@ -492,8 +496,8 @@ rag_chain = (
 )
 
 # Invoke — notice input is now just a plain string, not a dict
-response = rag_chain.invoke("What is contact detail of werqlabs?")
-print(response)
+# response = rag_chain.invoke("What is contact detail of werqlabs?")
+# print(response)
 
 # Note
 '''
@@ -619,6 +623,116 @@ System: "You are a helpful assistant...
 
 '''
 #pending from agents
+
+
+#Tools 
+
+#Agents
+
+
+# Fixed Chain:   You decide the steps → LLM follows them
+# Agent:         LLM decides the steps → executes them itself
+
+
+
+
+from langchain.tools import tool
+
+# Tool 2 — RAG Tool (your MongoDB PDF search, wrapped as a tool)
+@tool
+def werqlabs_knowledge_base(query: str) -> str:
+    """Search the WerqLabs company knowledge base PDF for information
+    about WerqLabs services, location, contact details, team, or offerings.
+    Use this for any WerqLabs specific questions."""
+    
+    docs = retriever.invoke(query)        # uses your MongoDB retriever
+    return format_docs(docs)              # returns formatted string of chunks
+
+# Tool 3 — Simple Calculator (custom tool example)
+@tool
+def calculator(expression: str) -> str:
+    """Useful for evaluating mathematical expressions.
+    Input should be a valid Python math expression like '2847 * 394'."""
+    
+    try:
+        result = eval(expression)
+        return str(result)
+    except Exception as e:
+        return f"Error: {str(e)}"
+    
+
+@tool
+def best_dev(query: str) -> str:
+    """When Someone asks who is the best python developer at WerqLabs, use this tool."""
+
+    return "Rajan Rajawat (Python AI Intern)"
+
+
+# Bundle all tools into a list
+tools = [werqlabs_knowledge_base, calculator, best_dev]
+
+# from langchain import hub
+
+# # Pull the standard ReAct prompt from LangChain hub
+# # This prompt instructs the LLM to follow Thought → Action → Observation format
+# react_prompt = hub.pull("react")
+# from langchain.agents import create_react_agent
+
+# # Create the agent — binds the LLM with the tools and the ReAct prompt
+# agent = create_react_agent(
+#     llm=llm,
+#     tools=tools,
+#     prompt=react_prompt
+# )
+
+from langchain.agents import create_agent
+
+agent = create_agent(model=llm, tools=tools)
+#Choose Model on the go, as per needs
+''' 
+from langchain_openai import ChatOpenAI
+from langchain.agents import create_agent
+from langchain.agents.middleware import wrap_model_call, ModelRequest, ModelResponse
+
+
+basic_model = ChatOpenAI(model="gpt-4.1-mini")
+advanced_model = ChatOpenAI(model="gpt-4.1")
+
+@wrap_model_call
+def dynamic_model_selection(request: ModelRequest, handler) -> ModelResponse:
+    """Choose model based on conversation complexity."""
+    message_count = len(request.state["messages"])
+
+    if message_count > 10:
+        # Use an advanced model for longer conversations
+        model = advanced_model
+    else:
+        model = basic_model
+
+    return handler(request.override(model=model))
+
+agent = create_agent(
+    model=basic_model,  # Default model
+    tools=tools,
+    middleware=[dynamic_model_selection]
+)
+'''
+
+#This wont work
+# response = agent.invoke('What is the contact details of WL?')
+#agent expects in following format
+
+# result = literary_agent.invoke(
+#     {"messages": [HumanMessage("Analyze the major themes in 'Pride and Prejudice'.")]}
+# )
+response = agent.invoke({
+    "messages": [
+        {"role": "user", "content": "who is the best developer at WerqLabs?"}
+    ]
+})
+
+print(response["messages"][-1].content) #role: ai content: will be printed
+
 
 
 
